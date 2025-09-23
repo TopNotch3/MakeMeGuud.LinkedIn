@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from typing import List
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -35,6 +36,18 @@ app = FastAPI(
     description="An API to analyze LinkedIn profiles and provide feedback.",
     version="0.1.0",
 )
+
+# <<< --- START OF NEW CORS CONFIGURATION --- >>>
+# This is the middleware that will handle CORS.
+# It allows requests from any origin, which is fine for development.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"], # Allows all methods
+    allow_headers=["*"], # Allows all headers
+)
+# <<< ---  END OF NEW CORS CONFIGURATION  --- >>>
 
 @app.get("/")
 def read_root():
