@@ -5,6 +5,9 @@ from pydantic import BaseModel, Field
 from typing import List
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from supabase import create_client, Client
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -61,9 +64,27 @@ def health_check():
     return {"status": "ok"}
 
 
+# --- NEW: Supabase Client Setup ---
+# We will use these to verify the user's token
+SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL") # Use the same env var as the webapp
+SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        # Supabase verifies the token and returns the user
+        user = supabase.auth.get_user(token).user
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return user
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
 # The /analyze endpoint using Gemini
 @app.post("/analyze", response_model=AnalysisOutput)
-async def analyze_profile(profile: ProfileInput):
+async def analyze_profile(profile: ProfileInput, current_user: dict = Depends(get_current_user)):
     """
     Receives LinkedIn profile data, analyzes it using the Gemini model,
     and returns actionable feedback.

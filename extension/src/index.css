@@ -1,0 +1,8 @@
+body { font-family: sans-serif; background-color: #f4f4f9; color: #333; margin: 0; }
+.container { padding: 20px; }
+button { background-color: #0a66c2; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px; }
+button:hover { background-color: #004182; }
+.results-section { margin-top: 20px; }
+ul { list-style-type: '✅ '; padding-left: 20px; }
+li { margin-bottom: 10px; }
+input { width: calc(100% - 20px); padding: 8px; margin-top: 10px; }
