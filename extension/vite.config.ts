@@ -10,7 +10,7 @@ export default defineConfig({
       // We define our content script as an additional input
       input: {
         main: resolve(__dirname, 'index.html'),
-        content: resolve(__dirname, 'src/content.js'),
+        content: resolve(__dirname, 'src/content.ts'),
       },
       output: {
         // This ensures the output filename is predictable

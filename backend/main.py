@@ -1,129 +1,120 @@
 import os
 import google.generativeai as genai
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Literal, Any
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from supabase import create_client, Client
+from fastapi.security import OAuth2PasswordBearer
 
-# Load environment variables from the .env file
 load_dotenv()
 
-# 1. CONFIGURE THE GEMINI CLIENT
-# Configure the Gemini API with your key
+# --- AI and Supabase Client Configuration ---
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-
-# Create an instance of the Generative Model.
-# 'gemini-1.5-pro-latest' is the most capable model.
-# If you face issues, a reliable alternative is 'gemini-pro'.
 model = genai.GenerativeModel('gemini-1.5-pro-latest')
-
-
-# Pydantic models for data structure
-class ProfileInput(BaseModel):
-    headline: str | None = None
-    bio: str | None = Field(None, description="The user's 'About' section.")
-    posts_text: str | None = Field(None, description="Concatenated text from the user's recent posts.")
-
-class AnalysisOutput(BaseModel):
-    immediate_steps: List[str]
-    suggestions: List[str]
-
-
-# FastAPI app instance
-app = FastAPI(
-    title="LinkedIn AI Profile Coach API",
-    description="An API to analyze LinkedIn profiles and provide feedback.",
-    version="0.1.0",
-)
-
-# <<< --- START OF NEW CORS CONFIGURATION --- >>>
-# This is the middleware that will handle CORS.
-# It allows requests from any origin, which is fine for development.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"], # Allows all methods
-    allow_headers=["*"], # Allows all headers
-)
-# <<< ---  END OF NEW CORS CONFIGURATION  --- >>>
-
-@app.get("/")
-def read_root():
-    """A welcome message for the API root."""
-    return {"message": "Welcome to the LinkedIn AI Coach API!"}
-
-
-@app.get("/health")
-def health_check():
-    """Returns a status 'ok' to indicate the server is healthy."""
-    return {"status": "ok"}
-
-
-# --- NEW: Supabase Client Setup ---
-# We will use these to verify the user's token
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL") # Use the same env var as the webapp
+SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# --- Pydantic Models ---
+class ProfileInput(BaseModel):
+    headline: str | None = None
+    bio: str | None = Field(None, description="The user's 'About' section.")
+    posts_text: str | None = Field(None, description="Concatenated text from the user's recent posts.")
+class AnalysisOutput(BaseModel):
+    immediate_steps: List[str]
+    suggestions: List[str]
+class QuestionnaireInput(BaseModel):
+    careerGoal: str
+    projects: str
+    skills: str
+class ApiResponse(BaseModel):
+    type: Literal['analysis', 'questionnaire_needed']
+    data: Any
+
+# --- FastAPI App Instance ---
+app = FastAPI(title="LinkedIn AI Profile Coach API", version="0.1.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# --- Helper Functions ---
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        # Supabase verifies the token and returns the user
         user = supabase.auth.get_user(token).user
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not user: raise HTTPException(status_code=401, detail="Invalid credentials")
         return user
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+def is_profile_complete(profile: ProfileInput) -> bool:
+    if not profile.posts_text or len(profile.posts_text) < 50:
+        return False
+    return True
 
-# The /analyze endpoint using Gemini
-@app.post("/analyze", response_model=AnalysisOutput)
+# --- API Endpoints ---
+@app.get("/health")
+def health_check():
+    return {"status": "reloaded successfully!", "version": 2}
+
+@app.post("/analyze", response_model=ApiResponse)
 async def analyze_profile(profile: ProfileInput, current_user: dict = Depends(get_current_user)):
-    """
-    Receives LinkedIn profile data, analyzes it using the Gemini model,
-    and returns actionable feedback.
-    """
-    # 2. CONSTRUCT THE DETAILED PROMPT FOR GEMINI
+    if not is_profile_complete(profile):
+        return ApiResponse(type="questionnaire_needed", data={})
+
     prompt = f"""
-    You are an expert LinkedIn Profile Coach. Your task is to analyze a user's profile data and provide actionable feedback.
+    Analyze the following LinkedIn profile data immediately. Provide your output in the exact format specified below. Do not ask for more information. Do not add any conversational text before or after your analysis. Your entire response must start with '### Immediate Steps'.
 
-    Here is the user's data:
-    - Headline: "{profile.headline}"
-    - Bio (About Section): "{profile.bio}"
-    - Recent Posts: "{profile.posts_text}"
+    **Profile Data:**
+    - Headline: "{profile.headline if profile.headline else '[Not Provided]'}"
+    - Bio (About Section): "{profile.bio if profile.bio else '[Not Provided]'}"
+    - Recent Posts: "{profile.posts_text if profile.posts_text else '[Not Provided]'}"
 
-    Please perform the following analysis and structure your response with the exact headings specified below:
+    **Instructions:**
+    If any section like the Bio is '[Not Provided]', your primary 'Immediate Step' must be to advise the user to fill it out. Base the rest of your analysis on the information that is available.
 
+    **Required Output Format:**
     ### Immediate Steps
-    Analyze the "Recent Posts" to identify specific achievements, projects, or skills that are NOT mentioned or highlighted in the "Bio" or "Headline". Generate a bulleted list of 3-5 high-impact, actionable steps the user should take right now to improve their profile based on this gap. For example, suggest specific ways to rephrase their headline or add a sentence to their bio that includes a missing achievement.
-
+    - [Actionable Step 1]
+    - [Actionable Step 2]
+    - [Actionable Step 3]
     ### Suggestions
-    Based on the user's entire profile, provide a bulleted list of 3 strategic, long-term suggestions for how they can continue to build their presence and authority on LinkedIn. These should be forward-looking, like content ideas, networking strategies, or skills to develop next.
+    - [Long-term Suggestion 1]
+    - [Long-term Suggestion 2]
     """
-
-    # 3. CALL THE GEMINI MODEL AND PARSE THE RESPONSE
+    
     response = await model.generate_content_async(prompt)
     full_text = response.text
+    print("--- RAW AI RESPONSE ---\n", full_text, "\n--- END RAW AI RESPONSE ---")
 
     try:
-        # Split the response into two parts based on our ### headings
-        steps_part, suggestions_part = full_text.split("### Suggestions")
+        immediate_steps, suggestions = [], []
+        steps_start = full_text.find("### Immediate Steps")
+        suggestions_start = full_text.find("### Suggestions")
+        if steps_start != -1:
+            steps_end = suggestions_start if suggestions_start != -1 else len(full_text)
+            steps_part = full_text[steps_start:steps_end]
+            immediate_steps = [line.strip().lstrip('-* ').capitalize() for line in steps_part.replace("### Immediate Steps", "").strip().split('\n') if line.strip()]
+        if suggestions_start != -1:
+            suggestions_part = full_text[suggestions_start:]
+            suggestions = [line.strip().lstrip('-* ').capitalize() for line in suggestions_part.replace("### Suggestions", "").strip().split('\n') if line.strip()]
+        if not immediate_steps and not suggestions:
+            raise ValueError("Parsing resulted in empty lists.")
+    except Exception as e:
+        print(f"Error parsing AI response: {e}")
+        immediate_steps = ["The AI provided feedback, but it could not be automatically formatted."]
+        suggestions = []
 
-        # Clean up and format the "Immediate Steps"
-        immediate_steps = [line.strip().lstrip('-* ').capitalize() for line in steps_part.replace("### Immediate Steps", "").strip().split('\n') if line.strip()]
+    analysis_data = AnalysisOutput(immediate_steps=immediate_steps, suggestions=suggestions)
+    return ApiResponse(type="analysis", data=analysis_data)
 
-        # Clean up and format the "Suggestions"
-        suggestions = [line.strip().lstrip('-* ').capitalize() for line in suggestions_part.strip().split('\n') if line.strip()]
-
-    except ValueError:
-        # Fallback if the AI doesn't follow the format perfectly
-        immediate_steps = ["Could not parse the AI's response for immediate steps."]
-        suggestions = ["Could not parse the AI's response for suggestions."]
-
-    return AnalysisOutput(immediate_steps=immediate_steps, suggestions=suggestions)
+@app.post("/generate-from-answers", response_model=AnalysisOutput)
+async def generate_from_answers(form_data: QuestionnaireInput, current_user: dict = Depends(get_current_user)):
+    # ... (This function is unchanged)
+    prompt = f"""
+    You are a LinkedIn Profile Coach...
+    """
+    response = await model.generate_content_async(prompt)
+    full_text = response.text
+    immediate_steps = [line.strip().lstrip('-* ').capitalize() for line in full_text.replace("### Immediate Steps", "").strip().split('\n') if line.strip()]
+    return AnalysisOutput(immediate_steps=immediate_steps, suggestions=[])
