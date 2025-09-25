@@ -1,40 +1,135 @@
-body { font-family: sans-serif; background-color: #f4f4f9; color: #333; margin: 0; }
-.container { padding: 20px; }
-button { background-color: #0a66c2; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 14px; width: 100%; margin-top: 10px; }
-button:hover { background-color: #004182; }
-.results-section { margin-top: 20px; }
-ul { list-style-type: '✅ '; padding-left: 20px; }
-li { margin-bottom: 10px; }
-input { width: calc(100% - 20px); padding: 8px; margin-top: 10px; }
+/* --- General & Base Styles --- */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f3f2ef; /* LinkedIn's light grey background */
+  color: #191919;
+  margin: 0;
+  width: 380px; /* A comfortable width for a side panel */
+}
 
-/* --- Styles for the Questionnaire Form --- */
-.questionnaire-form {
-  margin-top: 20px;
+.container {
+  padding: 16px 24px;
 }
-.questionnaire-form h3 {
-  margin-bottom: 5px;
+
+/* --- Typography --- */
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 4px;
+  margin-bottom: 24px;
 }
-.questionnaire-form p {
+
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+p {
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* In index.css */
+p.welcome-text, p.login-text {
   font-size: 14px;
   color: #666;
-  margin-bottom: 20px;
+  margin: 15px 0;
+  text-align: center; /* Center aligns the text */
 }
+
+/* --- Buttons --- */
+button {
+  background-color: #0a66c2; /* Official LinkedIn Blue */
+  color: white;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 20px; /* Pill-shaped buttons */
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 16px;
+  transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+button:hover {
+  background-color: #004182; /* Darker blue for hover */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* --- Loading State & Spinner --- */
+.loading-state {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: #0a66c2;
+  margin: 0 auto 16px;
+  animation: spin 1s ease infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- Questionnaire Form --- */
 .questionnaire-form label {
   display: block;
-  font-weight: bold;
-  margin-top: 15px;
-  margin-bottom: 5px;
+  font-weight: 600;
+  margin-top: 16px;
+  margin-bottom: 6px;
   font-size: 14px;
 }
-.questionnaire-form input,
+
+.questionnaire-form input[type="text"],
+.questionnaire-form input[type="password"],
 .questionnaire-form textarea {
-  width: calc(100% - 22px); /* Full width minus padding */
+  width: calc(100% - 24px);
   padding: 10px;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 1px solid #ccc;
   font-size: 14px;
+  font-family: inherit;
 }
+
 .questionnaire-form textarea {
   min-height: 80px;
   resize: vertical;
+}
+
+/* --- Results Display --- */
+.results-section {
+  margin-top: 24px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 20px;
+}
+
+.results-section ul {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.results-section li {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.results-section li::before {
+  content: '🔹'; /* A more subtle icon */
+  margin-right: 12px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #0a66c2;
 }

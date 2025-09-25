@@ -40,3 +40,10 @@
 .read-the-docs {
   color: #888;
 }
+
+p.welcome-text, p.login-text {
+  font-size: 14px;
+  color: #666;
+  margin: 15px 0;
+  text-align: center; /* Center aligns the text */
+}

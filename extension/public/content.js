@@ -1,6 +1,6 @@
-// --- HELPER FUNCTION (unchanged) ---
-function waitForElement(selector: string, timeout = 5000): Promise<Element> {
-  return new Promise((resolve, reject) => {
+// This function now resolves with 'null' on timeout instead of failing.
+function waitForElement(selector, timeout = 3000) {
+  return new Promise((resolve) => {
     const interval = setInterval(() => {
       const element = document.querySelector(selector);
       if (element) {
@@ -11,44 +11,42 @@ function waitForElement(selector: string, timeout = 5000): Promise<Element> {
 
     setTimeout(() => {
       clearInterval(interval);
-      reject(new Error(`Element with selector "${selector}" not found within ${timeout}ms.`));
+      resolve(null); // Resolve with null instead of rejecting the promise
     }, timeout);
   });
 }
 
-// --- UPDATED SCRAPER FUNCTION ---
+// This is the updated, more robust scraper function.
 async function scrapeProfileData() {
   console.log("Starting scrape... Waiting for elements to appear.");
-
   try {
-    // --- FINAL, MORE RELIABLE SELECTORS ---
-    // The headline selector is usually stable.
     const headlineSelector = ".text-body-medium.break-words";
-    // This new selector finds the element with id="about", then finds the text container right after it.
-    // This is much more reliable than using the random class names.
-    const bioSelector = ".artdeco-card.pv-profile-card .inline-show-more-text";
+    const bioSelector = "#about + div .inline-show-more-text";
     const postsSelector = ".scaffold-finite-scroll__content .feed-shared-update-v2";
 
-    // Wait for the main profile elements to be ready
+    // We still wait for the headline as it should always be present.
     await waitForElement(headlineSelector);
     
+    // We scroll to the bottom to load all posts.
     await scrollToBottom();
     
-    const headlineElement = document.querySelector(headlineSelector) as HTMLElement | null;
-    const headline = headlineElement?.innerText.trim() || null;
+    // --- START OF FIX ---
+    // We now handle each piece of data individually.
+    const headlineElement = await waitForElement(headlineSelector);
+    const headline = headlineElement ? headlineElement.innerText.trim() : null;
 
-    const bioElement = document.querySelector(bioSelector) as HTMLElement | null;
-    const bio = bioElement?.innerText.trim() || null;
-
+    const bioElement = await waitForElement(bioSelector);
+    const bio = bioElement ? bioElement.innerText.trim() : null; // Gracefully handles a missing bio
+    
     const postElements = document.querySelectorAll(postsSelector);
     let posts_text = "";
     postElements.forEach(post => {
-      const postContentElement = post.querySelector(".update-components-text") as HTMLElement | null;
-      const postContent = postContentElement?.innerText.trim();
+      const postContent = post.querySelector(".update-components-text")?.innerText.trim();
       if (postContent) {
         posts_text += postContent + "\n---\n";
       }
     });
+    // --- END OF FIX ---
 
     const profileData = {
       headline: headline,
@@ -56,16 +54,15 @@ async function scrapeProfileData() {
       posts_text: posts_text
     };
     
-    console.log("--- Scraped Profile Data ---", profileData);
+    console.log("--- Scraped Profile Data ---", profileData); // Check this log to see what was found
     chrome.runtime.sendMessage({ action: "scrapedData", data: profileData });
 
   } catch (error) {
     console.error("Scraping failed:", error);
-    chrome.runtime.sendMessage({ action: "scrapeFailed", error: (error as Error).message });
+    chrome.runtime.sendMessage({ action: "scrapeFailed", error: error.message });
   }
 }
 
-// --- UNCHANGED SCROLL FUNCTION ---
 async function scrollToBottom() {
   let lastHeight = 0;
   let currentHeight = -1;
@@ -77,5 +74,4 @@ async function scrollToBottom() {
   }
 }
 
-// Start the process
 scrapeProfileData();
